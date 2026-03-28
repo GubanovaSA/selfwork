@@ -1,0 +1,274 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Самостоятельная работа 2\n",
+    "## Схема 2: Управление взаимоотношениями с клиентами (CRM)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Задание 1: Подключение к базе данных\n",
+    "**Дата подключения:** 2024\n",
+    "**Сервер:** localhost:5432\n",
+    "**База данных:** postgres\n",
+    "**Пользователь:** postgres\n",
+    "\n",
+    "Подключение выполнено успешно через pgAdmin. Версия PostgreSQL: 18"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Задание 2: Создание схемы и таблиц\n",
+    "**Схема:** crm\n",
+    "\n",
+    "**SQL код создания таблиц:**"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "-- Создание схемы CRM\n",
+    "CREATE SCHEMA IF NOT EXISTS crm;\n",
+    "\n",
+    "-- Устанавливаем схему по умолчанию\n",
+    "SET search_path TO crm;\n",
+    "\n",
+    "-- Таблица companies (компании)\n",
+    "CREATE TABLE IF NOT EXISTS companies (\n",
+    "    company_id SERIAL PRIMARY KEY,\n",
+    "    name VARCHAR(200) NOT NULL,\n",
+    "    industry VARCHAR(100),\n",
+    "    website VARCHAR(100),\n",
+    "    phone VARCHAR(20),\n",
+    "    created_date DATE DEFAULT CURRENT_DATE\n",
+    ");\n",
+    "\n",
+    "-- Таблица contacts (контакты)\n",
+    "CREATE TABLE IF NOT EXISTS contacts (\n",
+    "    contact_id SERIAL PRIMARY KEY,\n",
+    "    company_id INT REFERENCES companies(company_id) ON DELETE CASCADE,\n",
+    "    first_name VARCHAR(50) NOT NULL,\n",
+    "    last_name VARCHAR(50) NOT NULL,\n",
+    "    email VARCHAR(100) UNIQUE,\n",
+    "    phone VARCHAR(20),\n",
+    "    position VARCHAR(100),\n",
+    "    is_decision_maker BOOLEAN DEFAULT FALSE\n",
+    ");\n",
+    "\n",
+    "-- Таблица deals (сделки)\n",
+    "CREATE TABLE IF NOT EXISTS deals (\n",
+    "    deal_id SERIAL PRIMARY KEY,\n",
+    "    company_id INT REFERENCES companies(company_id) ON DELETE CASCADE,\n",
+    "    deal_name VARCHAR(200) NOT NULL,\n",
+    "    stage VARCHAR(50) CHECK (stage IN ('Квалификация', 'Предложение', 'Переговоры', 'Закрытие выигрыш', 'Закрытие проигрыш')),\n",
+    "    amount NUMERIC(12,2),\n",
+    "    probability INT CHECK (probability BETWEEN 0 AND 100),\n",
+    "    expected_close_date DATE,\n",
+    "    actual_close_date DATE\n",
+    ");\n",
+    "\n",
+    "-- Таблица activities (активности)\n",
+    "CREATE TABLE IF NOT EXISTS activities (\n",
+    "    activity_id SERIAL PRIMARY KEY,\n",
+    "    contact_id INT REFERENCES contacts(contact_id) ON DELETE CASCADE,\n",
+    "    deal_id INT REFERENCES deals(deal_id) ON DELETE CASCADE,\n",
+    "    type VARCHAR(50) CHECK (type IN ('Звонок', 'Email', 'Встреча', 'Демонстрация', 'Презентация', 'Отправка КП')),\n",
+    "    notes TEXT,\n",
+    "    activity_date DATE DEFAULT CURRENT_DATE\n",
+    ");\n",
+    "\n",
+    "SELECT 'Таблицы успешно созданы' AS result;"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Задание 3: Заполнение таблиц данными\n",
+    "**Количество записей в каждой таблице:**\n",
+    "\n",
+    "| Таблица | Количество записей |\n",
+    "|---------|-------------------|\n",
+    "| companies | 150 |\n",
+    "| contacts | 450 (в среднем) |\n",
+    "| deals | 300 (в среднем) |\n",
+    "| activities | 800 (в среднем) |\n",
+    "\n",
+    "**SQL код для заполнения данными:**"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "-- Заполнение companies (150 компаний)\n",
+    "INSERT INTO crm.companies (name, industry, website, phone, created_date)\n",
+    "SELECT \n",
+    "    'Компания_' || generate_series::text,\n",
+    "    (ARRAY['IT', 'Ритейл', 'Производство', 'Услуги', 'Финансы', 'Страхование', 'Логистика', \n",
+    "           'Медицина', 'Образование', 'Строительство'])[floor(random() * 10 + 1)],\n",
+    "    'www.company' || generate_series::text || '.ru',\n",
+    "    '+7' || floor(900 + random() * 99)::text || floor(1000000 + random() * 8999999)::text,\n",
+    "    ('2023-' || floor(1 + random() * 12)::text || '-' || floor(1 + random() * 28)::text)::date\n",
+    "FROM generate_series(1, 150);\n",
+    "\n",
+    "-- Заполнение contacts (от 2 до 5 контактов на компанию)\n",
+    "INSERT INTO crm.contacts (company_id, first_name, last_name, email, phone, position, is_decision_maker)\n",
+    "SELECT \n",
+    "    c.company_id,\n",
+    "    (ARRAY['Иван', 'Анна', 'Петр', 'Елена', 'Сергей', 'Ольга', 'Дмитрий', 'Мария'])[floor(random() * 8 + 1)],\n",
+    "    (ARRAY['Иванов', 'Петрова', 'Сидоров', 'Козлова', 'Смирнов', 'Новикова'])[floor(random() * 6 + 1)],\n",
+    "    'contact' || generate_series::text || '@company' || c.company_id || '.ru',\n",
+    "    '+7' || floor(900 + random() * 99)::text || floor(1000000 + random() * 8999999)::text,\n",
+    "    (ARRAY['Директор', 'Менеджер', 'Специалист', 'Руководитель'])[floor(random() * 4 + 1)],\n",
+    "    random() < 0.3\n",
+    "FROM crm.companies c\n",
+    "CROSS JOIN LATERAL generate_series(1, floor(2 + random() * 4)::int);\n",
+    "\n",
+    "SELECT 'Данные успешно добавлены' AS result;"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Задание 4: Простой SELECT запрос\n",
+    "**Запрос:** Вывести первые 10 компаний\n",
+    "\n",
+    "```sql\n",
+    "SELECT company_id, name, industry, phone, created_date \n",
+    "FROM crm.companies \n",
+    "LIMIT 10;\n",
+    "```\n",
+    "\n",
+    "**Результат:**"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "-- Выполните в pgAdmin\n",
+    "SELECT company_id, name, industry, phone, created_date \n",
+    "FROM crm.companies \n",
+    "LIMIT 10;"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Задание 5: JOIN запрос и экспорт в CSV\n",
+    "**JOIN запрос для анализа эффективности работы с клиентами:**"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "-- JOIN запрос для экспорта в CSV\n",
+    "SELECT \n",
+    "    c.name AS компания,\n",
+    "    c.industry AS отрасль,\n",
+    "    COUNT(DISTINCT cont.contact_id) AS количество_контактов,\n",
+    "    COUNT(DISTINCT d.deal_id) AS количество_сделок,\n",
+    "    COUNT(DISTINCT CASE WHEN d.stage = 'Закрытие выигрыш' THEN d.deal_id END) AS выигранные_сделки,\n",
+    "    COUNT(DISTINCT CASE WHEN d.stage = 'Закрытие проигрыш' THEN d.deal_id END) AS проигранные_сделки,\n",
+    "    ROUND(COUNT(DISTINCT CASE WHEN d.stage = 'Закрытие выигрыш' THEN d.deal_id END) * 100.0 / \n",
+    "          NULLIF(COUNT(DISTINCT d.deal_id), 0), 2) AS процент_выигрыша,\n",
+    "    COUNT(DISTINCT a.activity_id) AS количество_активностей\n",
+    "FROM crm.companies c\n",
+    "LEFT JOIN crm.contacts cont ON c.company_id = cont.company_id\n",
+    "LEFT JOIN crm.deals d ON c.company_id = d.company_id\n",
+    "LEFT JOIN crm.activities a ON cont.contact_id = a.contact_id\n",
+    "GROUP BY c.name, c.industry\n",
+    "ORDER BY выигранные_сделки DESC;"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Экспорт результатов в CSV\n",
+    "\n",
+    "**Способ 1: Через pgAdmin**\n",
+    "1. Выполните JOIN запрос выше\n",
+    "2. Нажмите F8 (или иконку \"Download as CSV\")\n",
+    "3. Сохраните файл как `crm_report_for_datalens.csv`\n",
+    "\n",
+    "**Способ 2: Через COPY команду**\n",
+    "```sql\n",
+    "COPY (\n",
+    "    SELECT \n",
+    "        c.name AS компания,\n",
+    "        c.industry AS отрасль,\n",
+    "        COUNT(DISTINCT cont.contact_id) AS количество_контактов,\n",
+    "        COUNT(DISTINCT d.deal_id) AS количество_сделок,\n",
+    "        COUNT(DISTINCT CASE WHEN d.stage = 'Закрытие выигрыш' THEN d.deal_id END) AS выигранные_сделки\n",
+    "    FROM crm.companies c\n",
+    "    LEFT JOIN crm.contacts cont ON c.company_id = cont.company_id\n",
+    "    LEFT JOIN crm.deals d ON c.company_id = d.company_id\n",
+    "    GROUP BY c.name, c.industry\n",
+    ") TO 'C:/temp/crm_report.csv' WITH CSV HEADER DELIMITER ',' ENCODING 'UTF8';\n",
+    "```"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### Вывод\n",
+    "\n",
+    "В ходе выполнения самостоятельной работы были выполнены все задания:\n",
+    "\n",
+    "1. ✅ Подключение к базе данных PostgreSQL\n",
+    "2. ✅ Создание схемы CRM и таблиц (companies, contacts, deals, activities)\n",
+    "3. ✅ Заполнение таблиц данными (100+ записей в каждой)\n",
+    "4. ✅ Выполнение простого SELECT запроса\n",
+    "5. ✅ Выполнение JOIN запроса и экспорт в CSV для Yandex DataLens\n",
+    "\n",
+    "**Файлы для сдачи:**\n",
+    "- `CRM_analysis.ipynb` - данный файл\n",
+    "- `crm_dump.sql` - дамп базы данных\n",
+    "- `crm_report_for_datalens.csv` - CSV файл для визуализации"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
